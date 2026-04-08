@@ -1,20 +1,18 @@
-import sqlite3
+import psycopg2
 import os
-from flask import Flask, render_template, request, redirect, url_for
-
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from flask import Flask, render_template, request, redirect, url_for, send_file
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import A4
-#from reportlab.pdfbase.ttfonts import TTFont
-#from reportlab.pdfbase import pdfmetrics
-
-from flask import send_file
 import io
 
 app = Flask(__name__)
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_FILE = os.path.join(BASE_DIR, "database.db")
+
+# ✅ Corection ici
+DATABASE_URL =os.environ.get("DATABASE_URL")
 
 MONTHS = ["Jan", "Fev", "Mar", "Avr", "Mai", "Juin",
           "Juil", "Aout", "Sep", "Oct", "Nov", "Dec"]
@@ -22,49 +20,45 @@ MONTHS = ["Jan", "Fev", "Mar", "Avr", "Mai", "Juin",
 # --------- ROUTE ADMIN DASHBOARD ----------------
 @app.route("/admin", methods=["GET", "POST"])
 def admin_dashboard():
-    conn = sqlite3.connect(DB_FILE)
+    conn = psycopg2.connect(DATABASE_URL)
     c = conn.cursor()
 
-    # Ajouter membre
     if request.method == "POST" and "add_member" in request.form:
         name = request.form["name"].strip()
         association = request.form["association"].strip().upper()
-        c.execute("INSERT INTO Member(name, association) VALUES (?, ?)", (name, association))
+        c.execute("INSERT INTO Member(name, association) VALUES (%s, %s)", (name, association))
         conn.commit()
 
-    # Supprimer membre et tous ses paiements
     if request.method == "POST" and "delete_member" in request.form:
         member_id = request.form["member_id"]
-        c.execute("DELETE FROM Payment WHERE member_id=?", (member_id,))
-        c.execute("DELETE FROM Member WHERE id=?", (member_id,))
+        c.execute("DELETE FROM Payment WHERE member_id=%s", (member_id,))
+        c.execute("DELETE FROM Member WHERE id=%s", (member_id,))
         conn.commit()
         return redirect(url_for("admin_dashboard"))
 
-    # Ajouter paiement
     if request.method == "POST" and "add_payment" in request.form:
         member_id = request.form["member_id"]
         month = request.form["month"]
         year = request.form["year"]
         amount = float(request.form["amount"])
-        c.execute("INSERT INTO Payment(member_id, month, year, amount) VALUES (?, ?, ?, ?)",
+        c.execute("INSERT INTO Payment(member_id, month, year, amount) VALUES (%s, %s, %s, %s)",
                   (member_id, month, year, amount))
         conn.commit()
 
-    # Supprimer paiement
     if request.method == "POST" and "delete_payment" in request.form:
         payment_id = request.form["payment_id"]
-        c.execute("DELETE FROM Payment WHERE id=?", (payment_id,))
+        c.execute("DELETE FROM Payment WHERE id=%s", (payment_id,))
         conn.commit()
         return redirect(url_for("admin_dashboard"))
 
-    # Liste des membres
     c.execute("SELECT id, name, association FROM Member")
     members = c.fetchall()
 
-    # Liste des paiements
-    c.execute("SELECT Payment.id, Member.name, Payment.month, Payment.year, Payment.amount "
-              "FROM Payment JOIN Member ON Payment.member_id=Member.id "
-              "ORDER BY Member.name")
+    c.execute("""
+        SELECT Payment.id, Member.name, Payment.month, Payment.year, Payment.amount
+        FROM Payment JOIN Member ON Payment.member_id=Member.id
+        ORDER BY Member.name
+    """)
     payments = c.fetchall()
 
     conn.close()
@@ -75,42 +69,48 @@ def admin_dashboard():
 def public_view(association):
     association = association.strip().upper()
 
-    year_selected = request.form.get("year") if request.method=="POST" else None
+    year_selected = request.form.get("year") if request.method == "POST" else None
     if not year_selected:
         from datetime import date
         year_selected = date.today().year
+
     year_selected = str(year_selected)
 
-    conn = sqlite3.connect(DB_FILE)
+    conn = psycopg2.connect(DATABASE_URL)
     c = conn.cursor()
 
-    # Membres actuels de l'association
-    c.execute("SELECT id, name FROM Member WHERE UPPER(association)=?", (association,))
+    c.execute("SELECT id, name FROM Member WHERE UPPER(association)=%s", (association,))
     members = c.fetchall()
 
     table_data = []
-    total_per_month = {m:0 for m in MONTHS}
+    total_per_month = {m: 0 for m in MONTHS}
     total_general = 0
 
     for member_id, member_name in members:
         row_months = {}
         member_total = 0
+
         for month in MONTHS:
             c.execute("""
                 SELECT SUM(amount) FROM Payment
-                WHERE member_id=? AND TRIM(month)=? AND year=?
+                WHERE member_id=%s AND TRIM(month)=%s AND year=%s
             """, (member_id, month, year_selected))
+
             result = c.fetchone()[0]
             amount = result if result else 0
+
             row_months[month] = amount
             member_total += amount
             total_per_month[month] += amount
+
         total_general += member_total
+
         table_data.append({
             "name": member_name,
             "months": row_months,
             "total": member_total
         })
+
     conn.close()
 
     return render_template(
@@ -123,55 +123,26 @@ def public_view(association):
         total_general=total_general
     )
 
-
-
-
+# --------- EXPORT PDF ----------------
 @app.route("/export/<association>/<year>")
 def export_pdf(association, year):
-
-    from flask import send_file
-    import io
-
     association = association.upper().strip()
     year = str(year)
 
-    conn = sqlite3.connect(DB_FILE)
+    conn = psycopg2.connect(DATABASE_URL)
     c = conn.cursor()
 
-    c.execute("SELECT id, name FROM Member WHERE UPPER(association)=?", (association,))
+    c.execute("SELECT id, name FROM Member WHERE UPPER(association)=%s", (association,))
     members = c.fetchall()
 
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
-
     elements = []
     style = getSampleStyleSheet()
 
-    # ===== CHOIX AUTOMATIQUE LOGO & SIGNATURE =====
-    if association == "CEEN":
-        logo_file = "logo.png"
-        signature_file = "signature_ceen.png"
-    elif association == "ADG":
-        logo_file = "logo_adg.png"
-        signature_file = "signature_adg.png"
-    else:
-        logo_file = None
-        signature_file = None
-
-    # ===== LOGO =====
-    if logo_file:
-        logo_path = os.path.join(BASE_DIR, "static", logo_file)
-        if os.path.exists(logo_path):
-            logo = Image(logo_path, width=120, height=120)
-            elements.append(logo)
-
-    elements.append(Spacer(1, 12))
-
-    # ===== TITRE =====
     elements.append(Paragraph(f"{association} - Cotisations {year}", style['Heading1']))
     elements.append(Spacer(1, 20))
 
-    # ===== TABLEAU =====
     data = [["Nom"] + MONTHS + ["Total"]]
     total_general = 0
 
@@ -182,10 +153,12 @@ def export_pdf(association, year):
         for month in MONTHS:
             c.execute("""
                 SELECT SUM(amount) FROM Payment
-                WHERE member_id=? AND TRIM(month)=? AND year=?
+                WHERE member_id=%s AND TRIM(month)=%s AND year=%s
             """, (member_id, month, year))
+
             result = c.fetchone()[0]
             amount = result if result else 0
+
             row.append(amount)
             member_total += amount
 
@@ -193,51 +166,41 @@ def export_pdf(association, year):
         total_general += member_total
         data.append(row)
 
-    data.append(["TOTAL"] + [""]*12 + [total_general])
+    data.append(["TOTAL"] + [""] * 12 + [total_general])
 
     table = Table(data, repeatRows=1)
     table.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
-        ('GRID', (0,0), (-1,-1), 1, colors.black),
-        ('ALIGN', (1,1), (-1,-1), 'CENTER')
+        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('ALIGN', (1, 1), (-1, -1), 'CENTER')
     ]))
 
     elements.append(table)
-    elements.append(Spacer(1, 40))
-
-    # ===== SIGNATURE =====
-    if signature_file:
-        signature_path = os.path.join(BASE_DIR, "static", signature_file)
-        if os.path.exists(signature_path):
-            elements.append(Paragraph("La Trésorière :", style['Normal']))
-            elements.append(Spacer(1, 10))
-            signature = Image(signature_path, width=150, height=60)
-            elements.append(signature)
-
     doc.build(elements)
+
     buffer.seek(0)
     conn.close()
 
-    return send_file(
-        buffer,
-        as_attachment=True,
-        download_name=f"{association}_{year}.pdf",
-        mimetype="application/pdf"
-    )
-# --------- CREATION DB SI NON EXISTE -----------------
+    return send_file(buffer, as_attachment=True,
+                     download_name=f"{association}_{year}.pdf",
+                     mimetype="application/pdf")
+
+# --------- INIT DB ----------------
 def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("""
+    conn = psycopg2.connect(DATABASE_URL)
+    cur = conn.cursor()
+
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS Member(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
             association TEXT NOT NULL
         )
     """)
-    c.execute("""
+
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS Payment(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             member_id INTEGER,
             month TEXT,
             year TEXT,
@@ -245,7 +208,9 @@ def init_db():
             FOREIGN KEY(member_id) REFERENCES Member(id)
         )
     """)
+
     conn.commit()
+    cur.close()
     conn.close()
 
 if __name__ == "__main__":
