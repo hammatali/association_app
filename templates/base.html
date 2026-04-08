@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ association }} - Cotisations</title>
+    <style>
+        body { font-family: Arial; background:#fdfdfd; padding:20px; }
+        table { border-collapse: collapse; width:100%; margin-top:20px; }
+        th, td { border:1px solid #000; padding:8px; text-align:center; }
+        th { background-color:#f2f2f2; }
+        .paid { color:green; }
+        .unpaid { color:red; }
+        input { padding:5px; width:100px; }
+        button { padding:5px 10px; }
+    </style>
+</head>
+<body>
+<h2>Association {{ association }}</h2>
+
+<form method="POST">
+    <label>Afficher l'année :</label>
+    <input type="number" name="year" value="{{ year }}">
+    <button type="submit">Afficher</button>
+</form>
+
+<table>
+<tr>
+<th>Nom</th>
+<th>Paiement</th>
+</tr>
+{% for name, month, amount in data %}
+<tr>
+<td>{{ name }}</td>
+<td>
+{% if amount %}
+<span class="paid">{{ month }} - {{ amount }} MRU</span>
+{% else %}
+<span class="unpaid">0</span>
+{% endif %}
+</td>
+</tr>
+{% endfor %}
+</table>
+
+<p style="margin-top:20px;">Développé par Saamtooro</p>
+</body>
+</html>

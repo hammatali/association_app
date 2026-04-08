@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard Admin</title>
+    <style>
+        body { font-family: Arial; padding:20px; }
+        table { border-collapse: collapse; width:100%; margin-bottom:20px; }
+        th, td { border:1px solid black; padding:6px; text-align:center; }
+        th { background:#eee; }
+        input, select { padding:4px; }
+        button { padding:4px 8px; }
+    </style>
+</head>
+<body>
+<h2>Dashboard Admin</h2>
+
+<h3>Ajouter un membre</h3>
+<form method="POST">
+    <input type="text" name="name" placeholder="Nom du membre" required>
+    <input type="text" name="association" placeholder="Association (CEEN / ADG)" required>
+    <button type="submit" name="add_member">Ajouter</button>
+</form>
+
+<h3>Liste des membres</h3>
+<table>
+<tr>
+    <th>ID</th><th>Nom</th><th>Association</th><th>Action</th>
+</tr>
+{% for m in members %}
+<tr>
+    <td>{{ m[0] }}</td>
+    <td>{{ m[1] }}</td>
+    <td>{{ m[2] }}</td>
+    <td>
+        <form method="POST" style="display:inline;">
+            <input type="hidden" name="member_id" value="{{ m[0] }}">
+            <button type="submit" name="delete_member">Supprimer</button>
+        </form>
+    </td>
+</tr>
+{% endfor %}
+</table>
+
+<h3>Ajouter paiement</h3>
+<form method="POST">
+    <select name="member_id" required>
+        <option value="">Sélectionner membre</option>
+        {% for m in members %}
+            <option value="{{ m[0] }}">{{ m[1] }} ({{ m[2] }})</option>
+        {% endfor %}
+    </select>
+    <select name="month" required>
+        {% for m in months %}
+            <option value="{{ m }}">{{ m }}</option>
+        {% endfor %}
+    </select>
+    <input type="number" name="year" placeholder="Année" required>
+    <input type="number" name="amount" placeholder="Montant" required>
+    <button type="submit" name="add_payment">Ajouter</button>
+</form>
+
+<h3>Liste des paiements</h3>
+<table>
+<tr>
+    <th>ID</th><th>Membre</th><th>Mois</th><th>Année</th><th>Montant</th><th>Action</th>
+</tr>
+{% for p in payments %}
+<tr>
+    <td>{{ p[0] }}</td>
+    <td>{{ p[1] }}</td>
+    <td>{{ p[2] }}</td>
+    <td>{{ p[3] }}</td>
+    <td>{{ p[4] }}</td>
+    <td>
+        <form method="POST" style="display:inline;">
+            <input type="hidden" name="payment_id" value="{{ p[0] }}">
+            <button type="submit" name="delete_payment">Supprimer</button>
+        </form>
+    </td>
+</tr>
+{% endfor %}
+</table>
+</body>
+</html>
