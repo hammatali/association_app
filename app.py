@@ -10,24 +10,26 @@ from functools import wraps
 
 app = Flask(__name__)
 
-# ✅ Correction DATABASE_URL pour Render (remplace postgres:// par postgresql://)
+# ✅ CONFIGURATION NEON
 db_env = os.environ.get("DATABASE_URL")
 if db_env and db_env.startswith("postgres://"):
     DATABASE_URL = db_env.replace("postgres://", "postgresql://", 1)
 else:
     DATABASE_URL = db_env
 
-# 🔐 CONFIGURATION SÉCURITÉ ADMIN
-ADMIN_USER = "admin"  # Changez-le ici
-ADMIN_PASS = "motpasse"  # Changez-le ici
+# 🔐 SÉCURITÉ ADMIN
+ADMIN_USER = "admin"
+ADMIN_PASS = "SALL250159"
+
+def get_db_connection():
+    # Nécessaire pour Neon.tech
+    return psycopg2.connect(DATABASE_URL, sslmode='require')
 
 def check_auth(username, password):
     return username == ADMIN_USER and password == ADMIN_PASS
 
 def authenticate():
-    return Response(
-    'Veuillez vous connecter pour accéder à cette page.', 401,
-    {'WWW-Authenticate': 'Basic realm="Login Required"'})
+    return Response('Identifiants invalides.', 401, {'WWW-Authenticate': 'Basic realm="Login Required"'})
 
 def requires_auth(f):
     @wraps(f)
@@ -41,16 +43,15 @@ def requires_auth(f):
 MONTHS = ["Jan", "Fev", "Mar", "Avr", "Mai", "Juin",
           "Juil", "Aout", "Sep", "Oct", "Nov", "Dec"]
 
-# ✅ AJOUT : Redirection automatique si on arrive sur la racine /
 @app.route("/")
 def home():
-    return "Bienvenue ! Accédez à /votre_association pour voir les données."
+    return "Application Active. Accédez à /admin ou /votre_association"
 
-# --------- ROUTE ADMIN DASHBOARD (SÉCURISÉE) ----------------
+# --------- ROUTE ADMIN ----------------
 @app.route("/admin", methods=["GET", "POST"])
-@requires_auth  # <-- Sécurité ajoutée ici
+@requires_auth
 def admin_dashboard():
-    conn = psycopg2.connect(DATABASE_URL)
+    conn = get_db_connection()
     c = conn.cursor()
 
     if request.method == "POST" and "add_member" in request.form:
@@ -83,14 +84,12 @@ def admin_dashboard():
 
     c.execute("SELECT id, name, association FROM Member")
     members = c.fetchall()
-
     c.execute("""
         SELECT Payment.id, Member.name, Payment.month, Payment.year, Payment.amount
         FROM Payment JOIN Member ON Payment.member_id=Member.id
         ORDER BY Member.name
     """)
     payments = c.fetchall()
-
     conn.close()
     return render_template("dashboard.html", members=members, payments=payments, months=MONTHS)
 
@@ -98,13 +97,10 @@ def admin_dashboard():
 @app.route("/<association>", methods=["GET", "POST"])
 def public_view(association):
     association = association.strip().upper()
-    year_selected = request.form.get("year") if request.method == "POST" else None
-    if not year_selected:
-        from datetime import date
-        year_selected = date.today().year
-    year_selected = str(year_selected)
+    from datetime import date
+    year_selected = request.form.get("year", str(date.today().year))
 
-    conn = psycopg2.connect(DATABASE_URL)
+    conn = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT id, name FROM Member WHERE UPPER(association)=%s", (association,))
     members = c.fetchall()
@@ -117,12 +113,9 @@ def public_view(association):
         row_months = {}
         member_total = 0
         for month in MONTHS:
-            c.execute("""
-                SELECT SUM(amount) FROM Payment
-                WHERE member_id=%s AND TRIM(month)=%s AND year=%s
-            """, (member_id, month, year_selected))
-            result = c.fetchone()[0]
-            amount = result if result else 0
+            c.execute("SELECT SUM(amount) FROM Payment WHERE member_id=%s AND TRIM(month)=%s AND year=%s", (member_id, month, year_selected))
+            res = c.fetchone()[0]
+            amount = res if res else 0
             row_months[month] = amount
             member_total += amount
             total_per_month[month] += amount
@@ -136,57 +129,43 @@ def public_view(association):
 # --------- EXPORT PDF ----------------
 @app.route("/export/<association>/<year>")
 def export_pdf(association, year):
-    association = association.upper().strip()
-    year = str(year)
-    conn = psycopg2.connect(DATABASE_URL)
+    conn = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT id, name FROM Member WHERE UPPER(association)=%s", (association,))
+    c.execute("SELECT id, name FROM Member WHERE UPPER(association)=%s", (association.upper(),))
     members = c.fetchall()
-
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
     elements = []
     style = getSampleStyleSheet()
-    elements.append(Paragraph(f"{association} - Cotisations {year}", style['Heading1']))
-    elements.append(Spacer(1, 20))
-
+    elements.append(Paragraph(f"{association.upper()} - {year}", style['Heading1']))
+    
     data = [["Nom"] + MONTHS + ["Total"]]
-    total_general = 0
-    for member_id, member_name in members:
-        row = [member_name]
-        member_total = 0
-        for month in MONTHS:
-            c.execute("SELECT SUM(amount) FROM Payment WHERE member_id=%s AND TRIM(month)=%s AND year=%s", (member_id, month, year))
-            result = c.fetchone()[0]
-            amount = result if result else 0
-            row.append(amount)
-            member_total += amount
-        row.append(member_total)
-        total_general += member_total
+    for m_id, m_name in members:
+        row = [m_name]
+        for mon in MONTHS:
+            c.execute("SELECT SUM(amount) FROM Payment WHERE member_id=%s AND TRIM(month)=%s AND year=%s", (m_id, mon, year))
+            res = c.fetchone()[0]
+            row.append(res if res else 0)
         data.append(row)
     
-    data.append(["TOTAL"] + [""] * 12 + [total_general])
-    table = Table(data, repeatRows=1)
-    table.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey), ('GRID', (0, 0), (-1, -1), 1, colors.black)]))
+    table = Table(data)
+    table.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 1, colors.black)]))
     elements.append(table)
     doc.build(elements)
     buffer.seek(0)
     conn.close()
-    return send_file(buffer, as_attachment=True, download_name=f"{association}_{year}.pdf", mimetype="application/pdf")
+    return send_file(buffer, as_attachment=True, download_name="export.pdf", mimetype="application/pdf")
 
-# --------- INIT DB ----------------
 def init_db():
-    if not DATABASE_URL: return # Évite de planter si l'URL est vide
-    conn = psycopg2.connect(DATABASE_URL)
+    if not DATABASE_URL: return
+    conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("CREATE TABLE IF NOT EXISTS Member(id SERIAL PRIMARY KEY, name TEXT NOT NULL, association TEXT NOT NULL)")
+    cur.execute("CREATE TABLE IF NOT EXISTS Member(id SERIAL PRIMARY KEY, name TEXT, association TEXT)")
     cur.execute("CREATE TABLE IF NOT EXISTS Payment(id SERIAL PRIMARY KEY, member_id INTEGER, month TEXT, year TEXT, amount REAL, FOREIGN KEY(member_id) REFERENCES Member(id))")
     conn.commit()
-    cur.close()
     conn.close()
 
 if __name__ == "__main__":
     init_db()
-    # Sur Render, le port doit être dynamique
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
