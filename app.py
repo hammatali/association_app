@@ -20,8 +20,8 @@ MONTHS = ["Jan", "Fev", "Mar", "Avr", "Mai", "Juin",
           "Juil", "Aout", "Sep", "Oct", "Nov", "Dec"]
 
 # -------- LOGIN ADMIN --------
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "1234"
+ADMIN_USERNAME = "SALL"
+ADMIN_PASSWORD = "SALL&22450"
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
