@@ -7,33 +7,33 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import A4
 import io
 from functools import wraps
+from datetime import date
 
 app = Flask(__name__)
 
-# ✅ CONFIGURATION POUR LA BASE INTERNE RENDER
-# Transforme postgres:// en postgresql:// pour que Python soit content
+# ✅ CONFIGURATION DATABASE RENDER
+# Transforme postgres:// en postgresql:// pour la compatibilité Python
 raw_url = os.environ.get("DATABASE_URL")
 if raw_url and raw_url.startswith("postgres://"):
     DATABASE_URL = raw_url.replace("postgres://", "postgresql://", 1)
 else:
     DATABASE_URL = raw_url
 
-# 🔐 TES IDENTIFIANTS ADMIN
+# 🔐 IDENTIFIANTS ADMIN
 ADMIN_USER = "admin"
 ADMIN_PASS = "SALL250159"
 
-# Fonction pour se connecter à la base
 def get_db_connection():
-    # Sur la base interne Render, une connexion simple suffit
+    # Connexion simple pour le réseau interne Render
     return psycopg2.connect(DATABASE_URL)
 
-# --- SÉCURITÉ ---
+# --- SÉCURITÉ ADMIN ---
 def check_auth(username, password):
     return username == ADMIN_USER and password == ADMIN_PASS
 
 def authenticate():
     return Response(
-        'Identifiants requis.', 401,
+        'Identifiants requis pour accéder à l\'administration.', 401,
         {'WWW-Authenticate': 'Basic realm="Login Required"'})
 
 def requires_auth(f):
@@ -48,12 +48,12 @@ def requires_auth(f):
 MONTHS = ["Jan", "Fev", "Mar", "Avr", "Mai", "Juin",
           "Juil", "Aout", "Sep", "Oct", "Nov", "Dec"]
 
-# --- ROUTE ACCUEIL ---
+# --- ROUTES ---
+
 @app.route("/")
 def home():
-    return "L'application est en ligne ! Accédez à /admin ou à votre /NOM_ASSOCIATION"
+    return "L'application est en ligne. Accédez à /admin pour gérer les données."
 
-# --- ROUTE ADMIN ---
 @app.route("/admin", methods=["GET", "POST"])
 @requires_auth
 def admin_dashboard():
@@ -61,95 +61,80 @@ def admin_dashboard():
     c = conn.cursor()
 
     if request.method == "POST":
-        # Ajouter un membre
         if "add_member" in request.form:
             name = request.form["name"].strip()
             association = request.form["association"].strip().upper()
             c.execute("INSERT INTO Member(name, association) VALUES (%s, %s)", (name, association))
-            conn.commit()
         
-        # Supprimer un membre
         elif "delete_member" in request.form:
-            member_id = request.form["member_id"]
-            c.execute("DELETE FROM Payment WHERE member_id=%s", (member_id,))
-            c.execute("DELETE FROM Member WHERE id=%s", (member_id,))
-            conn.commit()
+            mid = request.form["member_id"]
+            c.execute("DELETE FROM Payment WHERE member_id=%s", (mid,))
+            c.execute("DELETE FROM Member WHERE id=%s", (mid,))
         
-        # Ajouter un paiement
         elif "add_payment" in request.form:
-            member_id = request.form["member_id"]
-            month = request.form["month"]
-            year = request.form["year"]
-            amount = float(request.form["amount"])
-            c.execute("INSERT INTO Payment(member_id, month, year, amount) VALUES (%s, %s, %s, %s)",
-                      (member_id, month, year, amount))
-            conn.commit()
+            mid = request.form["member_id"]
+            mon = request.form["month"]
+            yr = request.form["year"]
+            amt = float(request.form["amount"])
+            c.execute("INSERT INTO Payment(member_id, month, year, amount) VALUES (%s, %s, %s, %s)", (mid, mon, yr, amt))
 
-        # Supprimer un paiement
         elif "delete_payment" in request.form:
-            payment_id = request.form["payment_id"]
-            c.execute("DELETE FROM Payment WHERE id=%s", (payment_id,))
-            conn.commit()
+            pid = request.form["payment_id"]
+            c.execute("DELETE FROM Payment WHERE id=%s", (pid,))
+        
+        conn.commit()
 
-    # Récupérer les données pour l'affichage
-    c.execute("SELECT id, name, association FROM Member ORDER BY name")
+    c.execute("SELECT id, name, association FROM Member ORDER BY name ASC")
     members = c.fetchall()
-    c.execute("""
-        SELECT p.id, m.name, p.month, p.year, p.amount 
-        FROM Payment p JOIN Member m ON p.member_id = m.id 
-        ORDER BY p.id DESC
-    """)
+    c.execute("SELECT p.id, m.name, p.month, p.year, p.amount FROM Payment p JOIN Member m ON p.member_id = m.id ORDER BY p.id DESC")
     payments = c.fetchall()
-    
     conn.close()
     return render_template("dashboard.html", members=members, payments=payments, months=MONTHS)
 
-# --- ROUTE PUBLIQUE ---
 @app.route("/<association>", methods=["GET", "POST"])
 def public_view(association):
-    association = association.strip().upper()
-    from datetime import date
-    year_selected = request.form.get("year", str(date.today().year))
+    assoc_name = association.strip().upper()
+    year_selected = str(request.form.get("year", date.today().year))
 
     conn = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT id, name FROM Member WHERE UPPER(association)=%s", (association,))
+    c.execute("SELECT id, name FROM Member WHERE UPPER(association)=%s", (assoc_name,))
     members = c.fetchall()
 
     table_data = []
     total_per_month = {m: 0 for m in MONTHS}
     total_general = 0
 
-    for member_id, member_name in members:
+    for m_id, m_name in members:
         row_months = {}
-        member_total = 0
-        for month in MONTHS:
-            c.execute("SELECT SUM(amount) FROM Payment WHERE member_id=%s AND TRIM(month)=%s AND year=%s", (member_id, month, year_selected))
+        m_total = 0
+        for mon in MONTHS:
+            c.execute("SELECT SUM(amount) FROM Payment WHERE member_id=%s AND TRIM(month)=%s AND year=%s", (m_id, mon, year_selected))
             res = c.fetchone()[0]
-            amount = res if res else 0
-            row_months[month] = amount
-            member_total += amount
-            total_per_month[month] += amount
-        total_general += member_total
-        table_data.append({"name": member_name, "months": row_months, "total": member_total})
+            amt = float(res) if res is not None else 0.0
+            row_months[mon] = amt
+            m_total += amt
+            total_per_month[mon] += amt
+        
+        total_general += m_total
+        table_data.append({"name": m_name, "months": row_months, "total": m_total})
 
     conn.close()
-    return render_template("public.html", association=association, year=year_selected, 
+    return render_template("public.html", association=assoc_name, year=year_selected, 
                            months=MONTHS, table_data=table_data, total_per_month=total_per_month, total_general=total_general)
 
-# --- EXPORT PDF ---
 @app.route("/export/<association>/<year>")
 def export_pdf(association, year):
     conn = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT id, name FROM Member WHERE UPPER(association)=%s", (association.upper().strip(),))
+    c.execute("SELECT id, name FROM Member WHERE UPPER(association)=%s", (association.upper(),))
     members = c.fetchall()
     
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
     elements = []
     style = getSampleStyleSheet()
-    elements.append(Paragraph(f"{association.upper()} - Cotisations {year}", style['Heading1']))
+    elements.append(Paragraph(f"Cotisations {association.upper()} - {year}", style['Heading1']))
     
     data = [["Nom"] + MONTHS + ["Total"]]
     for m_id, m_name in members:
@@ -157,7 +142,8 @@ def export_pdf(association, year):
         m_total = 0
         for mon in MONTHS:
             c.execute("SELECT SUM(amount) FROM Payment WHERE member_id=%s AND TRIM(month)=%s AND year=%s", (m_id, mon, year))
-            val = c.fetchone()[0] or 0
+            res = c.fetchone()[0]
+            val = float(res) if res is not None else 0.0
             row.append(val)
             m_total += val
         row.append(m_total)
@@ -171,15 +157,17 @@ def export_pdf(association, year):
     conn.close()
     return send_file(buffer, as_attachment=True, download_name=f"export_{association}.pdf", mimetype="application/pdf")
 
-# --- INITIALISATION BASE ---
 def init_db():
     if not DATABASE_URL: return
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("CREATE TABLE IF NOT EXISTS Member(id SERIAL PRIMARY KEY, name TEXT, association TEXT)")
-    cur.execute("CREATE TABLE IF NOT EXISTS Payment(id SERIAL PRIMARY KEY, member_id INTEGER, month TEXT, year TEXT, amount REAL, FOREIGN KEY(member_id) REFERENCES Member(id))")
-    conn.commit()
-    conn.close()
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("CREATE TABLE IF NOT EXISTS Member(id SERIAL PRIMARY KEY, name TEXT, association TEXT)")
+        cur.execute("CREATE TABLE IF NOT EXISTS Payment(id SERIAL PRIMARY KEY, member_id INTEGER, month TEXT, year TEXT, amount REAL, FOREIGN KEY(member_id) REFERENCES Member(id))")
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Erreur d'initialisation : {e}")
 
 if __name__ == "__main__":
     init_db()
