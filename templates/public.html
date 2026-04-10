@@ -2,15 +2,23 @@
 <html>
 <head>
     <title>{{ association }} - Cotisations {{ year }}</title>
-
-    <!-- Lien CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { font-family: Arial; padding:20px; background:#fdfdfd; }
+        table { border-collapse: collapse; width:100%; }
+        th, td { border:1px solid black; padding:6px; text-align:center; }
+        th { background:#eee; }
+        .paid { color:green; font-weight:bold; }
+        .unpaid { color:red; }
+    </style>
 </head>
-
 <body>
 
 <header>
-    <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Logo" width="200">
+    {% if association == "CEEN" %}
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo CEEN" width="200">
+    {% elif association == "ADG" %}
+        <img src="{{ url_for('static', filename='logo_adg.png') }}" alt="Logo ADG" width="200">
+    {% endif %}
 </header>
 
 <h2>{{ association }} - Cotisations {{ year }}</h2>
@@ -27,9 +35,9 @@
     <button>Exporter PDF</button>
 </a>
 
-<br><br>
+<br>
 
-<table class="excel-table">
+<table>
 <tr>
     <th>Nom</th>
     {% for m in months %}
@@ -46,7 +54,7 @@
             {% if row.months[m] > 0 %}
                 <span class="paid">{{ row.months[m] }}</span>
             {% else %}
-                <span class="not-paid">0</span>
+                <span class="unpaid">0</span>
             {% endif %}
         </td>
     {% endfor %}
@@ -54,7 +62,7 @@
 </tr>
 {% endfor %}
 
-<tr class="total-row">
+<tr>
     <th>Total Général</th>
     {% for m in months %}
         <th>{{ total_per_month[m] }}</th>
@@ -63,9 +71,9 @@
 </tr>
 </table>
 
-<footer>
-    <p>© 2026 - Site développé par Sal Laamtooro</p>
-</footer>
+<br>
+
+<p>© 2026 - Site développé par Sal Laamtooro</p>
 
 </body>
 </html>
