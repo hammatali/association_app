@@ -13,8 +13,12 @@
 </head>
 <body>
 
-<header style="text-align:center;">
-        <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Logo" width="200">
+<header>
+    {% if association == "CEEN" %}
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo CEEN" width="200">
+    {% elif association == "ADG" %}
+        <img src="{{ url_for('static', filename='logo_adg.png') }}" alt="Logo ADG" width="200">
+    {% endif %}
 </header>
 
 <h2>{{ association }} - Cotisations {{ year }}</h2>
@@ -44,7 +48,7 @@
 
 {% for row in table_data %}
 <tr>
-    <td>{{ [row.name](http://row.name/) }}</td>
+    <td>{{ row.name }}</td>
     {% for m in months %}
         <td>
             {% if row.months[m] > 0 %}
