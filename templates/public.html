@@ -3,19 +3,13 @@
 <head>
     <title>{{ association }} - Cotisations {{ year }}</title>
 
-    <style>
-        body { font-family: Arial; padding:20px; background:#fdfdfd; }
-        table { border-collapse: collapse; width:100%; }
-        th, td { border:1px solid black; padding:6px; text-align:center; }
-        th { background:#eee; }
-        .paid { color:green; font-weight:bold; }
-        .unpaid { color:red; }
-    </style>
+    <!-- Lien CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 
 <body>
 
-<header style="text-align:center;">
+<header>
     <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Logo" width="200">
 </header>
 
@@ -35,7 +29,7 @@
 
 <br><br>
 
-<table>
+<table class="excel-table">
 <tr>
     <th>Nom</th>
     {% for m in months %}
@@ -52,7 +46,7 @@
             {% if row.months[m] > 0 %}
                 <span class="paid">{{ row.months[m] }}</span>
             {% else %}
-                <span class="unpaid">0</span>
+                <span class="not-paid">0</span>
             {% endif %}
         </td>
     {% endfor %}
@@ -60,7 +54,7 @@
 </tr>
 {% endfor %}
 
-<tr>
+<tr class="total-row">
     <th>Total Général</th>
     {% for m in months %}
         <th>{{ total_per_month[m] }}</th>
@@ -69,9 +63,9 @@
 </tr>
 </table>
 
-<br>
-
-<p>© 2026 - Site développé par Sal Laamtooro</p>
+<footer>
+    <p>© 2026 - Site développé par Sal Laamtooro</p>
+</footer>
 
 </body>
 </html>
