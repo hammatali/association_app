@@ -2,6 +2,7 @@
 <html>
 <head>
     <title>{{ association }} - Cotisations {{ year }}</title>
+
     <style>
         body { font-family: Arial; padding:20px; background:#fdfdfd; }
         table { border-collapse: collapse; width:100%; }
@@ -11,10 +12,11 @@
         .unpaid { color:red; }
     </style>
 </head>
+
 <body>
 
 <header style="text-align:center;">
-        <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Logo" width="200">
+    <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Logo" width="200">
 </header>
 
 <h2>{{ association }} - Cotisations {{ year }}</h2>
@@ -31,7 +33,7 @@
     <button>Exporter PDF</button>
 </a>
 
-<br>
+<br><br>
 
 <table>
 <tr>
@@ -44,7 +46,7 @@
 
 {% for row in table_data %}
 <tr>
-    <td>{{ [row.name](http://row.name/) }}</td>
+    <td>{{ row.name }}</td>
     {% for m in months %}
         <td>
             {% if row.months[m] > 0 %}

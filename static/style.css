@@ -11,6 +11,12 @@ header {
     padding:15px;
 }
 
+/* 🔥 CENTRAGE LOGO */
+header img {
+    display: block;
+    margin: 0 auto;
+}
+
 .container {
     width:95%;
     margin:30px auto;
@@ -21,18 +27,25 @@ header {
 }
 
 .excel-table {
+    width: 100%;
     border-collapse: collapse;
-    width:100%;
+    font-family: Arial, sans-serif;
 }
 
-.excel-table th, .excel-table td {
+.excel-table th,
+.excel-table td {
     border:2px solid black;
-    padding:6px;
+    padding:8px;
     text-align:center;
 }
 
 .excel-table th {
     background:#d9edf7;
+    font-weight:bold;
+}
+
+.excel-table tr:nth-child(even) td {
+    background-color:#f2f2f2;
 }
 
 .paid {
@@ -56,29 +69,3 @@ footer {
     color:white;
     margin-top:40px;
 }
-
-
-
-/* Table style type Excel complet */
-.excel-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-family: Arial, sans-serif;
-}
-
-.excel-table th,
-.excel-table td {
-    border: 2px solid #000; /* bordures noires bien visibles */
-    padding: 8px;
-    text-align: center;
-}
-
-.excel-table th {
-    background-color: #d9edf7; /* couleur en-tête */
-    font-weight: bold;
-}
-
-.excel-table tr:nth-child(even) td {
-    background-color: #f2f2f2; /* lignes alternées */
-}
-
