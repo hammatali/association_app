@@ -232,6 +232,10 @@ def init_db():
 
     conn.commit()
     conn.close()
-
+@app.route("/ping")
+def ping():
+    conn = get_conn()
+    conn.close()
+    return "ok"
 # IMPORTANT pour Render
 init_db()
