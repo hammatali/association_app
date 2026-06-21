@@ -12,7 +12,6 @@
     </style>
 </head>
 <body>
-
 <header>
     {% if association == "CEEN" %}
         <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo CEEN" width="200">
@@ -20,23 +19,17 @@
         <img src="{{ url_for('static', filename='logo_adg.png') }}" alt="Logo ADG" width="200">
     {% endif %}
 </header>
-
 <h2>{{ association }} - Cotisations {{ year }}</h2>
-
 <form method="POST">
     <label>Année :</label>
     <input type="number" name="year" value="{{ year }}">
     <button type="submit">Afficher</button>
 </form>
-
 <br>
-
 <a href="/export/{{ association }}/{{ year }}">
     <button>Exporter PDF</button>
 </a>
-
 <br>
-
 <table>
 <tr>
     <th>Nom</th>
@@ -45,7 +38,6 @@
     {% endfor %}
     <th>Total payé</th>
 </tr>
-
 {% for row in table_data %}
 <tr>
     <td>{{ row.name }}</td>
@@ -61,7 +53,6 @@
     <td><strong>{{ row.total }}</strong></td>
 </tr>
 {% endfor %}
-
 <tr>
     <th>Total Général</th>
     {% for m in months %}
@@ -70,10 +61,9 @@
     <th>{{ total_general }}</th>
 </tr>
 </table>
-
 <br>
-
-<p>© 2026 - Site développé par Sal Laamtooro</p>
-
+<footer class="site-footer" style="text-align: center;">
+  © 2026 site créé par <strong>SALL Amadou Malick</strong>
+</footer>
 </body>
 </html>
